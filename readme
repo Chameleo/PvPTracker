@@ -1,0 +1,9 @@
+PvPTracker is a simple WoW tracking hack designed for use in PvP environment.
+Supports version 3.3.5.
+While it is running, nearby players will be shown on the mini map.
+In addition a tiny window is placed on top of the game to see number of hostile and friendly players around you.
+To start/stop use Ctrl + Alt + T shortcut.
+You can drag the window to any place on the screen and position will be saved between runs.
+
+Provided AS IS without any warranty. Feel free to do whatever you want with it.
+I do not recommend using it on retail servers.
