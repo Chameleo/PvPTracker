@@ -4,6 +4,12 @@ using System.Text;
 
 namespace PvPTracker
 {
+	internal enum WowVersions
+	{
+		wow335 = 12340,
+		wow406 = 13623
+	}
+
 	// By Apoc of mmowned.com
 	[Flags]
 	internal enum TrackObjectFlags
@@ -57,15 +63,29 @@ namespace PvPTracker
 	/// Memory locations specific to the ObjectManager.
 	/// 3.3.5a
 	/// </summary>
-	public enum ObjectManager : uint
+	public class ObjectManager335
 	{
-		ClientConnection = 0x00C79CE0,
-		CurrentManager = 0x2ED0,
-		LocalGUID = 0xC0,
-		FirstObject = 0xAC,
-		NextObject = 0x3C,
-		ObjectType = 0x14
+		public int ClientConnection = 0x879CE0;//0xC79CE0;
+		public int CurrentManager = 0x2ED0;
+		public int LocalGUID = 0xC0;
+		public int FirstObject = 0xAC;
+		public int NextObject = 0x3C;
+        public int ObjectType = 0x14;
 	}
+
+    /// <summary>
+    /// Memory locations specific to the ObjectManager.
+    /// 4.0.6a
+    /// </summary>
+    public class ObjectManager406
+    {
+        public int ClientConnection = 0x8BF1A8;//0xCBF1A8;
+        public int CurrentManager = 0x462C;
+        public int LocalGUID = 0xB8;
+        public int FirstObject = 0xB4;
+        public int NextObject = 0x3C;
+        public int ObjectType = 0x14;
+    }
 
 	/// <summary>
 	/// Types available for a <see cref="WowObject"/>

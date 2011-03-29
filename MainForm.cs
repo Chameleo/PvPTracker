@@ -20,12 +20,16 @@ namespace PvPTracker
 		int SelfFaction = -1;
 		int FriendlyPlayers = 0;
 		int EnemyPlayers = 0;
+		dynamic ObjectFields;
+		dynamic UnitFields;
+		dynamic PlayerFields;
+		dynamic ObjectManager;
 
 		public MainForm()
 		{
 			InitializeComponent();
 			KeyboardHook.SetHook( new Action(StartStop),
-                 KeyboardHook.BeginKeys.Alt_Control, KeyboardHook.EndKey.T );
+				 KeyboardHook.BeginKeys.Alt_Control, KeyboardHook.EndKey.T );
 		}
 
 		private void StartStop()
@@ -41,14 +45,14 @@ namespace PvPTracker
 		/// <param name="wowObjectPtr">Base address of any WowObject</param>
 		/// <param name="field">Descriptor field</param>
 		/// <returns>Value of the descriptor field in memory.</returns>
-		static T GetStorageField<T>(IntPtr wowObjectPtr, uint field) where T : struct
+		static T GetStorageField<T>(IntPtr wowObjectPtr, int field) where T : struct
 		{
 			var descriptors = Memory.ReadAtOffset<IntPtr>(wowObjectPtr, 0x8);
 
 			return Memory.ReadAtOffset<T>(descriptors, field * 4);
 		}
 
-		static void SetStorageField<T>(IntPtr wowObjectPtr, uint field, T val) where T : struct
+		static void SetStorageField<T>(IntPtr wowObjectPtr, int field, T val) where T : struct
 		{
 			IntPtr descriptors = Memory.ReadAtOffset<IntPtr>(wowObjectPtr, 0x8);
 			IntPtr loc = new IntPtr(descriptors.ToInt32() + field * 4);
@@ -58,38 +62,47 @@ namespace PvPTracker
 		// Based on code from WRadar
 		private IntPtr UpdateObjects()
 		{
-			IntPtr CurrentManager = Memory.Read<IntPtr>(
-				new IntPtr((uint)ObjectManager.ClientConnection),
-				new IntPtr((uint)ObjectManager.CurrentManager));
+			IntPtr CurrentManager = Memory.ReadRelative<IntPtr>(
+				new IntPtr(ObjectManager.ClientConnection),
+				new IntPtr(ObjectManager.CurrentManager));
 			var localPlayerGuid =
-				Memory.ReadAtOffset<ulong>(CurrentManager, (uint)ObjectManager.LocalGUID);
+				Memory.ReadAtOffset<ulong>(CurrentManager, ObjectManager.LocalGUID);
 			var current =
-				Memory.ReadAtOffset<IntPtr>(CurrentManager, (uint)ObjectManager.FirstObject);
+				Memory.ReadAtOffset<IntPtr>(CurrentManager, ObjectManager.FirstObject);
 
 			if (current == IntPtr.Zero || ((uint)current & 1) == 1)
 			{
 				FriendlyPlayers = -1;
 				EnemyPlayers = -1;
+				SelfFaction = -1;
 				return IntPtr.Zero;
 			}
 			FriendlyPlayers = 0;
 			EnemyPlayers = 0;
 			IntPtr player = IntPtr.Zero;
 			for (;current != IntPtr.Zero && ((uint)current & 1) != 1;
-				current = Memory.ReadAtOffset<IntPtr>(current, (uint)ObjectManager.NextObject))
+				current = Memory.ReadAtOffset<IntPtr>(current, ObjectManager.NextObject))
 			{
-				var guid = GetStorageField<ulong>(current, (uint)ObjectFields.GUID);
+				var guid = GetStorageField<ulong>(current, ObjectFields.GUID);
 				bool self = localPlayerGuid == guid;
 				if (self)
-                {
-                    player = current;
+				{
+					player = current;
 					if (SelfFaction < 0)
 					{
 						SelfFaction = GetFaction(player);
 					}
-                }
+
+					uint flags = GetStorageField<uint>(current, PlayerFields.FLAGS);
+					uint flagTrackStealth = 0x0002;
+					uint newflags = flags | flagTrackStealth;
+					if (newflags != flags)
+					{
+						SetStorageField<uint>(current, PlayerFields.FLAGS, newflags);
+					}
+				}
 				ObjectType type = (ObjectType)Memory.ReadAtOffset<uint>(
-					current, (uint)ObjectManager.ObjectType);
+					current, ObjectManager.ObjectType);
 
 
 				bool tracked = false;
@@ -112,15 +125,15 @@ namespace PvPTracker
 					{
 						// clean untrackable flag
 						uint untrackable  = 0x04;
-						uint bytes = GetStorageField<uint>(current, (uint)UnitFields.BYTES_1);
+						uint bytes = GetStorageField<uint>(current, UnitFields.BYTES_1);
 						if((bytes & untrackable) != 0)
 						{
 							bytes &= ~untrackable;
-							SetStorageField<uint>(current, (uint)UnitFields.BYTES_1, untrackable);
+							SetStorageField<uint>(current, UnitFields.BYTES_1, untrackable);
 						}
 					}
 					uint dynFlagTracked = 0x0002;
-					uint flags = GetStorageField<uint>(current, (uint)UnitFields.DYNAMIC_FLAGS);
+					uint flags = GetStorageField<uint>(current, UnitFields.DYNAMIC_FLAGS);
 					uint newflags;
 					if(tracked)
 					{
@@ -132,7 +145,7 @@ namespace PvPTracker
 					}
 					if (newflags != flags)
 					{
-						SetStorageField<uint>(current, (uint)UnitFields.DYNAMIC_FLAGS, newflags);
+						SetStorageField<uint>(current, UnitFields.DYNAMIC_FLAGS, newflags);
 					}
 				}
 			}
@@ -142,14 +155,14 @@ namespace PvPTracker
 
 		void SetTracking(IntPtr player, TrackCreatureFlags flags)
 		{
-			SetStorageField<uint>(player, (uint)PlayerFields.TRACK_CREATURES, (uint)flags);
+			SetStorageField<uint>(player, PlayerFields.TRACK_CREATURES, (uint)flags);
 		}
 
-		private static int[] AllianceIDs = { 1, 3, 4, 115, 1629 };
-		private static int[] HordeIDs = { 2, 5, 6, 116, 1610 };
+		private static int[] AllianceIDs = { 1, 3, 4, 115, 1629, 2203 };
+		private static int[] HordeIDs = { 2, 5, 6, 116, 1610, 2204 };
 		public int GetFaction(IntPtr unit)
 		{
-			uint factionTemp = GetStorageField<uint>(unit, (uint)UnitFields.FACTIONTEMPLATE);
+			uint factionTemp = GetStorageField<uint>(unit, UnitFields.FACTIONTEMPLATE);
 			for (int i = 0; i <= AllianceIDs.Length - 1; i++)
 			{
 				if (factionTemp == AllianceIDs[i])
@@ -167,7 +180,6 @@ namespace PvPTracker
 			}
 			return -1;
 		}
-
 
 		private void MainForm_FormClosed(object sender, FormClosedEventArgs e)
 		{
@@ -197,12 +209,19 @@ namespace PvPTracker
 					if (procs.Length == 0)
 					{
 						SetStatus("wow.exe process not running");
+						OutLabel.Text = "off";
 						return;
 					}
 					Process wowProc = procs[0];
-					Memory.OpenProcess(wowProc.Id, AccessRights.ReadWrite);
+					Native.OpenProcessHandle(wowProc.Id);//, AccessRights.ReadWrite);
+					FileVersionInfo ver = wowProc.MainModule.FileVersionInfo;
+					int build = ver.FilePrivatePart;
+					WowVersions version = (WowVersions)Enum.Parse(typeof(WowVersions), build.ToString());
+					SetVersion(version);
+
 					procId = wowProc.Id;
 				}
+
 				IntPtr player = UpdateObjects();
 				//SetTracking(player, TrackCreatureFlags.Humanoids | TrackCreatureFlags.Beasts);
 				
@@ -212,6 +231,33 @@ namespace PvPTracker
 			catch (Exception ex)
 			{
 				SetStatus(ex.ToString());
+			}
+		}
+
+		void SetVersion(WowVersions ver)
+		{
+			switch(ver)
+			{
+				case WowVersions.wow335:
+				{
+					ObjectManager = new ObjectManager335();
+					ObjectFields = UpdateFields335.ObjectFields;
+					UnitFields = UpdateFields335.UnitFields;
+					PlayerFields = UpdateFields335.PlayerFields;
+					break;
+				}
+				case WowVersions.wow406:
+				{
+					ObjectManager = new ObjectManager406();
+					ObjectFields = UpdateFields406.ObjectFields;
+					UnitFields = UpdateFields406.UnitFields;
+					PlayerFields = UpdateFields406.PlayerFields;
+					break;
+				}
+				default:
+				{
+					throw new ArgumentException("Version unsupported " + ver);
+				}
 			}
 		}
 
